@@ -2,17 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import TransactionForm from "@/components/TransactionForm";
-import TransactionList from "@/components/TransactionList";
+import TransactionList, { Transaction } from "@/components/TransactionList";
 import { useTranslation } from "@/lib/i18n/useTranslation";
-
-interface Transaction {
-  id: number;
-  amount: number;
-  description: string;
-  category: string;
-  type: "income" | "expense";
-  date: string;
-}
 
 export default function TransactionsPage() {
   const { t } = useTranslation();
@@ -23,7 +14,9 @@ export default function TransactionsPage() {
     setLoading(true);
     try {
       const res = await fetch("/api/transactions");
-      setTransactions(await res.json());
+      if (res.ok) {
+        setTransactions(await res.json());
+      }
     } finally {
       setLoading(false);
     }
@@ -40,7 +33,7 @@ export default function TransactionsPage() {
         <TransactionForm onSuccess={fetchTransactions} />
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
         {loading ? (
           <div className="space-y-2">
             {[1, 2, 3, 4, 5].map((i) => (

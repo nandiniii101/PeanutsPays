@@ -4,13 +4,14 @@ import { ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { CategoryBadge } from "@/components/ui/Badge";
 import { useTranslation } from "@/lib/i18n/useTranslation";
 
-interface Transaction {
-  id: number;
+export interface Transaction {
+  id: string;
   amount: number;
   description: string;
   category: string;
   type: "income" | "expense";
   date: string;
+  isRecurring?: boolean;
 }
 
 interface TransactionListProps {
@@ -44,7 +45,16 @@ export default function TransactionList({ transactions }: TransactionListProps) 
               )}
             </span>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-[#0f2044] truncate">{txn.description}</p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <p className="text-sm font-medium text-[#0f2044] truncate">
+                  {txn.description}
+                </p>
+                {txn.isRecurring && (
+                  <span className="inline-flex items-center text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded">
+                    Recurring
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2 mt-0.5">
                 <CategoryBadge category={txn.category} />
                 <span className="text-xs text-gray-400">{formatDate(txn.date)}</span>

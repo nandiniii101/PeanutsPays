@@ -1,23 +1,18 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db/client";
-import { ensureTablesExist } from "@/lib/db/init";
-import { transactions } from "@/lib/db/schema";
-import { gte } from "drizzle-orm";
+import { requireUser, UnauthorizedError } from "@/lib/auth/helpers";
+import { getRecentTransactionsByUser } from "@/lib/db/queries";
 import { generateSavingTips } from "@/lib/ai/groq";
 import { fallbackTips } from "@/lib/ai/fallback";
 
 export async function GET() {
   try {
-    await ensureTablesExist();
+    const user = await requireUser();
 
     // Get current month's expenses
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-    const monthlyTxns = await db
-      .select()
-      .from(transactions)
-      .where(gte(transactions.date, monthStart));
+    const monthlyTxns = await getRecentTransactionsByUser(user.id, monthStart);
 
     const expenses = monthlyTxns.filter((t) => t.type === "expense");
     const totalSpend = expenses.reduce((s, t) => s + t.amount, 0);
@@ -42,6 +37,9 @@ export async function GET() {
 
     return NextResponse.json({ tips, summary });
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("[GET /api/tips]", err);
     return NextResponse.json(
       { tips: fallbackTips({}), summary: {} },

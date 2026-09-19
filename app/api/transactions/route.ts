@@ -1,21 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db/client";
-import { ensureTablesExist } from "@/lib/db/init";
-import { transactions } from "@/lib/db/schema";
-import { categorizeByRules } from "@/lib/categorize-rules";
-import { categorizeWithAI } from "@/lib/ai/groq";
-import { fallbackCategory } from "@/lib/ai/fallback";
-import { desc } from "drizzle-orm";
+import { requireUser, UnauthorizedError } from "@/lib/auth/helpers";
+import {
+  getTransactionsByUser,
+  insertTransaction,
+} from "@/lib/db/queries";
+import { z } from "zod";
+import crypto from "crypto";
+
+const createTxnSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    amount: z.number().positive(),
+    description: z.string().min(1),
+    category: z.string().min(1),
+    type: z.enum(["income", "expense"]),
+    date: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (!data.date) return true;
+      const parsedDate = new Date(data.date);
+      if (isNaN(parsedDate.getTime())) return false;
+      // Allow current day or past, reject future dates
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+      return parsedDate <= todayEnd;
+    },
+    {
+      message: "Transaction date cannot be in the future",
+      path: ["date"],
+    }
+  );
 
 export async function GET() {
   try {
-    await ensureTablesExist();
-    const rows = await db
-      .select()
-      .from(transactions)
-      .orderBy(desc(transactions.date));
+    const user = await requireUser();
+    const rows = await getTransactionsByUser(user.id);
     return NextResponse.json(rows);
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("[GET /api/transactions]", err);
     return NextResponse.json({ error: "Failed to fetch transactions" }, { status: 500 });
   }
@@ -23,35 +48,31 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureTablesExist();
+    const user = await requireUser();
     const body = await req.json();
-    const { amount, description, type } = body as {
-      amount: number;
-      description: string;
-      type: "income" | "expense";
-    };
+    const parsed = createTxnSchema.safeParse(body);
 
-    if (!amount || !description || !type) {
-      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid transaction payload" }, { status: 400 });
     }
 
-    // Categorization chain: rules -> AI -> fallback
-    let category = categorizeByRules(description);
-    if (!category) {
-      try {
-        category = await categorizeWithAI(description);
-      } catch {
-        category = fallbackCategory();
-      }
-    }
+    const { id, amount, description, category, type, date } = parsed.data;
 
-    const inserted = await db
-      .insert(transactions)
-      .values({ amount, description, category, type })
-      .returning();
+    const row = await insertTransaction({
+      id: id || crypto.randomUUID(),
+      userId: user.id,
+      amount,
+      description,
+      category,
+      type,
+      date,
+    });
 
-    return NextResponse.json(inserted[0], { status: 201 });
+    return NextResponse.json(row, { status: 201 });
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("[POST /api/transactions]", err);
     return NextResponse.json({ error: "Failed to create transaction" }, { status: 500 });
   }

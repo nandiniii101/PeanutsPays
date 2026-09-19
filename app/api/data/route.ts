@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db/client";
-import { ensureTablesExist } from "@/lib/db/init";
-import { sql } from "drizzle-orm";
+import { requireUser, UnauthorizedError } from "@/lib/auth/helpers";
+import { deleteAllUserData } from "@/lib/db/queries";
 
 export async function DELETE() {
   try {
-    await ensureTablesExist();
-    await db.run(sql`DELETE FROM lending_entries`);
-    await db.run(sql`DELETE FROM friends`);
-    await db.run(sql`DELETE FROM transactions`);
+    const user = await requireUser();
+    await deleteAllUserData(user.id);
     return NextResponse.json({ success: true });
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("[DELETE /api/data]", err);
     return NextResponse.json({ error: "Failed to clear data" }, { status: 500 });
   }

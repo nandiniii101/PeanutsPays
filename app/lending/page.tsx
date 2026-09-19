@@ -1,24 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import LendingLedger from "@/components/LendingLedger";
+import LendingLedger, { Friend } from "@/components/LendingLedger";
 import { useTranslation } from "@/lib/i18n/useTranslation";
-
-interface LendingEntry {
-  id: number;
-  amount: number;
-  direction: "lent" | "borrowed";
-  note?: string | null;
-  date: string;
-  settled: boolean;
-}
-
-interface Friend {
-  id: number;
-  name: string;
-  netBalance: number;
-  entries: LendingEntry[];
-}
 
 export default function LendingPage() {
   const { t } = useTranslation();
@@ -29,7 +13,9 @@ export default function LendingPage() {
     setLoading(true);
     try {
       const res = await fetch("/api/lending");
-      setFriends(await res.json());
+      if (res.ok) {
+        setFriends(await res.json());
+      }
     } finally {
       setLoading(false);
     }

@@ -4,8 +4,9 @@ import { useState } from "react";
 import { PlusCircle, Check, X } from "lucide-react";
 import { useTranslation } from "@/lib/i18n/useTranslation";
 
-interface LendingEntry {
-  id: number;
+export interface LendingEntry {
+  id: string;
+  friendId: string;
   amount: number;
   direction: "lent" | "borrowed";
   note?: string | null;
@@ -13,8 +14,8 @@ interface LendingEntry {
   settled: boolean;
 }
 
-interface Friend {
-  id: number;
+export interface Friend {
+  id: string;
   name: string;
   netBalance: number;
   entries: LendingEntry[];
@@ -34,30 +35,40 @@ function formatDate(dateStr: string) {
 
 export default function LendingLedger({ friends, onUpdate }: LendingLedgerProps) {
   const { t } = useTranslation();
+
   const [showForm, setShowForm] = useState(false);
   const [friendName, setFriendName] = useState("");
   const [amount, setAmount] = useState("");
   const [direction, setDirection] = useState<"lent" | "borrowed">("lent");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
-  const [settling, setSettling] = useState<number | null>(null);
+  const [settling, setSettling] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!friendName || !amount || Number(amount) <= 0) {
+
+    if (!friendName.trim() || !amount || Number(amount) <= 0) {
       setError("Please fill in friend name and a valid amount.");
       return;
     }
+
     setLoading(true);
     try {
       const res = await fetch("/api/lending", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ friendName, amount: parseFloat(amount), direction, note }),
+        body: JSON.stringify({
+          friendName: friendName.trim(),
+          amount: parseFloat(amount),
+          direction,
+          note: note.trim() ? note.trim() : null,
+        }),
       });
+
       if (!res.ok) throw new Error();
+
       setFriendName("");
       setAmount("");
       setNote("");
@@ -71,7 +82,7 @@ export default function LendingLedger({ friends, onUpdate }: LendingLedgerProps)
     }
   };
 
-  const settle = async (entryId: number) => {
+  const settle = async (entryId: string) => {
     setSettling(entryId);
     try {
       await fetch("/api/lending", {
@@ -100,18 +111,26 @@ export default function LendingLedger({ friends, onUpdate }: LendingLedgerProps)
         <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
           <div className="flex justify-between items-center mb-3">
             <h3 className="font-medium text-[#0f2044] text-sm">{t("lending.addEntry")}</h3>
-            <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">
+            <button
+              onClick={() => setShowForm(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
               <X size={16} />
             </button>
           </div>
           <form onSubmit={handleSubmit} className="space-y-3">
-            <input
-              type="text"
-              placeholder={t("lending.friendName")}
-              value={friendName}
-              onChange={(e) => setFriendName(e.target.value)}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                {t("lending.friendName")}
+              </label>
+              <input
+                type="text"
+                placeholder={t("lending.friendName")}
+                value={friendName}
+                onChange={(e) => setFriendName(e.target.value)}
+                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800"
+              />
+            </div>
 
             {/* Direction toggle */}
             <div className="flex rounded-md border border-gray-200 overflow-hidden">
@@ -125,7 +144,7 @@ export default function LendingLedger({ friends, onUpdate }: LendingLedgerProps)
                       ? d === "lent"
                         ? "bg-teal-600 text-white"
                         : "bg-[#f4614d] text-white"
-                      : "bg-white text-gray-600"
+                      : "bg-white text-gray-600 hover:bg-gray-50"
                   }`}
                 >
                   {d === "lent"
@@ -135,23 +154,36 @@ export default function LendingLedger({ friends, onUpdate }: LendingLedgerProps)
               ))}
             </div>
 
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              placeholder="Amount (INR)"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-            <input
-              type="text"
-              placeholder={t("lending.note")}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                Amount (INR)
+              </label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                {t("lending.note")} (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder={t("lending.note")}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800"
+              />
+            </div>
+
             {error && <p className="text-xs text-[#f4614d]">{error}</p>}
+
             <div className="flex gap-2">
               <button
                 type="submit"
@@ -163,7 +195,7 @@ export default function LendingLedger({ friends, onUpdate }: LendingLedgerProps)
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-4 py-2 border border-gray-200 rounded-md text-sm text-gray-600"
+                className="px-4 py-2 border border-gray-200 rounded-md text-sm text-gray-600 hover:bg-gray-50"
               >
                 {t("lending.cancel")}
               </button>
@@ -178,9 +210,12 @@ export default function LendingLedger({ friends, onUpdate }: LendingLedgerProps)
       )}
 
       {friends.map((friend) => (
-        <div key={friend.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-            <span className="font-medium text-[#0f2044]">{friend.name}</span>
+        <div
+          key={friend.id}
+          className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm"
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+            <span className="font-semibold text-[#0f2044]">{friend.name}</span>
             <span
               className={`text-sm font-semibold ${
                 friend.netBalance > 0
@@ -199,7 +234,10 @@ export default function LendingLedger({ friends, onUpdate }: LendingLedgerProps)
           </div>
           <ul className="divide-y divide-gray-50">
             {friend.entries.map((entry) => (
-              <li key={entry.id} className="flex items-center justify-between px-4 py-2.5">
+              <li
+                key={entry.id}
+                className="flex items-center justify-between px-4 py-2.5"
+              >
                 <div>
                   <span
                     className={`text-xs font-medium ${
@@ -209,9 +247,11 @@ export default function LendingLedger({ friends, onUpdate }: LendingLedgerProps)
                     {entry.direction === "lent" ? "Lent" : "Borrowed"}
                   </span>
                   {entry.note && (
-                    <span className="text-xs text-gray-400 ml-2">{entry.note}</span>
+                    <span className="text-xs text-gray-500 ml-2">{entry.note}</span>
                   )}
-                  <span className="text-xs text-gray-400 ml-2">{formatDate(entry.date)}</span>
+                  <span className="text-xs text-gray-400 ml-2">
+                    {formatDate(entry.date)}
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-medium text-[#0f2044]">
